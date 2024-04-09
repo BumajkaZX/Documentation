@@ -1,5 +1,5 @@
 # Documentation
-Подпиши нужный скрипт аттрибутом [Documentation("Description", "Tag")]
+Подпиши нужный скрипт атрибутом [Documentation("Description", "Tag")]
 ![image](https://github.com/BumajkaZX/Documentation/assets/83942256/b88e5833-a7a2-4977-867f-913894ec166d)
 
 Смотри описание в окне Documentation
