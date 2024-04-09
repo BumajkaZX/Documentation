@@ -9,6 +9,9 @@ namespace Documentation
     using UnityEngine;
     using UnityEngine.UIElements;
 
+    /// <summary>
+    /// Эдиторское окно документации
+    /// </summary>
     public class Documentation : EditorWindow
     {
         private event Action OnSelectionChange = delegate { };
@@ -17,9 +20,13 @@ namespace Documentation
 
         private List<string> _selectedParameters;
 
-        private HashSet<string> _existedNames;
+        private List<string> _existedNames;
+
+        private List<string> _filteredNames;
 
         private ListView _descriptionListView;
+
+        private ListView _namesListView;
 
         private List<TypeNDescription> _information;
 
@@ -34,7 +41,6 @@ namespace Documentation
         {
             UpdateDocumentation();
 
-
             var root = rootVisualElement;
 
             var toolbar = new Toolbar();
@@ -44,20 +50,17 @@ namespace Documentation
             var leftSide = new VisualElement();
             leftSide.style.minWidth = 100;
             leftSide.style.backgroundColor = new Color(0.15f, 0.15f, 0.15f);
+            
             var rightSide = new VisualElement();
             rightSide.style.backgroundColor = new Color(0.2f, 0.2f, 0.2f);
             rightSide.style.minWidth = 100;
-
-            var keysList = _existedNames.ToList();
-
+            
+            var searchTab = new ToolbarSearchField();
+            searchTab.RegisterValueChangedCallback(LeftTabCallback);
+            
             #region InitLeftSide
 
-            var namesList = new ListView(keysList,
-                                         makeItem: CreateLeftSideToggle,
-                                         bindItem: (element, i) => (element as ToolbarToggle).text = keysList[i]);
-
-            namesList.showAlternatingRowBackgrounds = AlternatingRowBackground.All;
-            namesList.virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight;
+            DrawNamesList();
 
             #endregion
 
@@ -72,8 +75,10 @@ namespace Documentation
             OnSelectionChange += ResetDescriptionList;
 
             #endregion
-
-            leftSide.Add(namesList);
+            
+            toolbar.Add(searchTab);
+            
+            leftSide.Add(_namesListView);
 
             rightSide.Add(_descriptionListView);
 
@@ -98,7 +103,42 @@ namespace Documentation
                     _descriptionListView.virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight;
                 }
             }
+
+            void DrawNamesList()
+            {
+                if (_namesListView == null)
+                {
+                    _namesListView = new ListView(_filteredNames,
+                                                  makeItem: CreateLeftSideToggle,
+                                                  bindItem: (element, i) =>
+                                                  {
+                                                      var toggle = (ToolbarToggle)element;
+                                                      bool isSelected = _selectedParameters.Contains(_filteredNames[i]);
+                                                      
+                                                      toggle.text = _filteredNames[i];
+                                                      SetToggle(toggle, isSelected);
+                                                      SetToggleValue(toggle, isSelected);
+                                                  });
+
+                    _namesListView.showAlternatingRowBackgrounds = AlternatingRowBackground.All;
+                    _namesListView.virtualizationMethod = CollectionVirtualizationMethod.DynamicHeight;
+                }
+            }
         }
+        private void LeftTabCallback(ChangeEvent<string> filterName)
+        {
+            if (string.IsNullOrEmpty(filterName.newValue))
+            {
+                _filteredNames = _existedNames;
+                _namesListView.itemsSource = _filteredNames;
+                return;
+            }
+            
+            _filteredNames = _existedNames.Where(name => name.Contains(filterName.newValue, StringComparison.CurrentCultureIgnoreCase)).ToList();
+            _filteredNames.Sort();
+            _namesListView.itemsSource = _filteredNames;
+        }
+        
         private void ResetDescriptionList()
         {
             _descriptionListView.itemsSource = _information;
@@ -129,20 +169,19 @@ namespace Documentation
                     
                     hashToAdd.Add(typeNDescription);
                 }
-             
+                
                 _information.AddRange(hashToAdd);
                 hashToAdd.Clear();
             }
         }
-
-        /// <summary>
-        /// Initialize needed parameters
-        /// </summary>
+        
         private void UpdateDocumentation()
         {
             _selectedParameters = new List<string>();
             _descriptions = new List<TypeNDescription>();
-            _existedNames = new HashSet<string>();
+            _existedNames = new List<string>();
+
+            var names = new HashSet<string>();
 
             var assembly = Assembly.GetExecutingAssembly();
 
@@ -164,7 +203,7 @@ namespace Documentation
                 {
                     foreach (var name in documentation.Names)
                     {
-                        _existedNames.Add(name);
+                        names.Add(name);
                     }
                   
                     descriptionObject.AssociatedNames = documentation.Names.ToList();
@@ -172,9 +211,11 @@ namespace Documentation
                 }
                 
             }
-        }
 
-      
+            _existedNames = names.ToList();
+            _existedNames.Sort();
+            _filteredNames = _existedNames;
+        }
 
         private VisualElement CreateLeftSideToggle()
         {
@@ -219,7 +260,6 @@ namespace Documentation
             classInfo.style.fontSize = 13;
 
             var description = new TextElement();
-
             
             splitUp.Add(classInfo);
             splitUp.Add(description);
@@ -232,24 +272,35 @@ namespace Documentation
         }
         private void OnClassInfoClicked(ChangeEvent<bool> evt)
         {
-            var toggle = evt.target as ToolbarToggle;
+            _namesListView.ClearSelection();
             
+            var toggle = evt.target as ToolbarToggle;
+
             if (evt.newValue)
             {
-                toggle.style.backgroundColor = new StyleColor(new Color(0.22f, 0.22f, 0.22f));
-                
                 _selectedParameters.Add(toggle.text);
-                
-                OnSelectionChange();
+            }
+            else
+            {
+                _selectedParameters.Remove(toggle.text);
+            }
+            
+            SetToggle(toggle, evt.newValue);
+        }
+
+        private void SetToggle(ToolbarToggle toggle, bool value)
+        {
+            OnSelectionChange();
+            if (value)
+            {
+                toggle.style.backgroundColor = new StyleColor(new Color(0.22f, 0.22f, 0.22f));
                 return;
             }
             
             toggle.style.backgroundColor = new StyleColor(new Color(0.15f, 0.15f, 0.15f));
-            
-            _selectedParameters.Remove(toggle.text);
-
-            OnSelectionChange();
         }
+
+        private void SetToggleValue(ToolbarToggle toggle, bool value) => toggle.SetValueWithoutNotify(value);
 
         private class TypeNDescription
         {
